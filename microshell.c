@@ -1,135 +1,140 @@
 #include "microshell.h"
-#include <stdio.h>
 
 int ft_strlen(char *str)
 {
     int i = 0;
+
     while (str[i])
         i++;
     return (i);
 }
 
-void ft_error(char * str, char * str1)
+void    print_error(char *str, char *str1, int n)
 {
     write(2, str, ft_strlen(str));
     if (str1)
         write(2, str1, ft_strlen(str1));
     write(2, "\n", 1);
+    if (n)
+        exit(1);
 }
 
-t_tokens    *init_token()
+t_tokens    *init_tokens()
 {
     t_tokens *tmp;
-
     if (!(tmp = malloc(sizeof(t_tokens))))
-        ft_error("error: fatal", NULL);
+        print_error("error: fatal", NULL, 1);
     if (!(tmp->cmds = malloc(sizeof(char *) * 1024)))
-        ft_error("error: fatal", NULL);
+        print_error("error: fatal", NULL, 1);
     tmp->std_in = 0;
     tmp->std_out = 1;
     return (tmp);
 }
 
-void    ft_pipe(t_tokens *token)
+void    ft_pipe(t_tokens *tokens)
 {
     int pip[2];
-    token->next = init_token();
+
     pipe(pip);
-    token->std_out = pip[1];
-    token->next->std_in = pip[0];
+    tokens->next = init_tokens();
+    tokens->std_out = pip[1];
+    tokens->next->std_in = pip[0];
 }
 
-int add_cmd(t_tokens *token, char **argv, int *i)
+int add_cmd(t_tokens *tokens, char **argv, int i)
 {
-    int k = 0;
-    while (argv[*i] && (strcmp((const char *)argv[*i], "|") && strcmp((const char *)argv[*i], ";")))
-    { 
-        token->cmds[k] = argv[(*i)];
-        (*i)++;
-        k++;
+    int j = 0;
+
+    while (argv[i] && strcmp(argv[i], ";") && strcmp(argv[i], "|"))
+    {
+        tokens->cmds[j] = argv[i];
+        i++;
+        j++;
     }
-    (*i)++;
-    token->cmds[k] = NULL;
-    return (*i);
+    i++;
+    tokens->cmds[j] = NULL;
+    return (i);
 }
 
-void    exec_cmd(t_tokens *token, int  *start, int  current)
+void    exec_cmd(t_tokens *tokens, int *start, int i)
 {
     int pid;
-
-    if (!strcmp(token->cmds[0], "cd"))
+    if (!(strcmp(tokens->cmds[0], "cd")))
     {
-        if (token->cmds[2])
-            ft_error("error: cd: bad arguments", NULL);
-        else if (chdir(token->cmds[1]))
-            ft_error("error: cd: cannot change ", token->cmds[1]);
+        if (tokens->cmds[2])
+            print_error("error: cd: bad arguments", NULL, 0);
+        else if (chdir(tokens->cmds[1]))
+            print_error("error: cd: cannot change ", tokens->cmds[1], 0);
+        *start = i;
         return ;
     }
     pid = fork();
+    if (pid < 0)
+        print_error("error: fatal", NULL, 1);
     if (pid == 0)
     {
-        if (token->std_out != 1)
+        if (tokens->std_out != 1)
         {
-            close(token->next->std_in);
-            dup2(token->std_out, 1);
+            close(tokens->next->std_in);
+            if (dup2(tokens->std_out, 1) == -1)
+                print_error("error: fatal", NULL, 1);
         }
-        if (token->std_in != 0)
-            dup2(token->std_in, 0);
-        execve(token->cmds[0], token->cmds, NULL);
-        ft_error("error: cannot execute ", token->cmds[0]);
-        exit(1);
+        if (tokens->std_in != 0)
+            if (dup2(tokens->std_in, 0) == -1)
+                print_error("error: fatal", NULL, 1);
+        execve(tokens->cmds[0], tokens->cmds, NULL);
+        print_error("error: cannot execute ", tokens->cmds[0], 1);
     }
-    if (token->std_out != 1)
-        close(token->std_out);
-    if (token->std_in != 0)
-        close(token->std_in);
-   if (token->std_out == 1)
-   {
-       while (*start < current)
-       {
-           wait(NULL);
-           (*start)++;
-       }
-   }
-}
-
-void    ft_free(t_tokens *token)
-{
-    if (token)
+    if (tokens->std_out != 1)
+        close(tokens->std_out);
+    if (tokens->std_in != 0)
+        close(tokens->std_in);
+    if (tokens->std_out == 1)
     {
-        if(token->cmds)
-            free(token->cmds);
-        free(token);
-        token = NULL;
+        while (*start < i)
+        {
+            wait(NULL);
+            (*start)++;
+        }
+    }
+}   
+
+void    ft_free(t_tokens *tokens)
+{
+    if (tokens)
+    {
+        if (tokens->cmds)
+            free(tokens->cmds);
+        free(tokens);
+        tokens = NULL;
     }
 }
 
-int main(int argc, char **argv)
+int     main(int argc, char **argv)
 {
-    t_tokens *token;
-    t_tokens *before;
-    int     start;
+    t_tokens *tokens;
     int i = 1;
+    int start = i;
+    t_tokens *before;
 
     if (argc < 2)
-        return (0);
-    start = i;
+        print_error("error: fatal", NULL, 1);
     while (i < argc)
     {
-        if (token == NULL || start == i)
-            token = init_token();
-        if (!(strcmp((const char *)argv[i], ";")))
+        if (tokens == NULL || start == i)
+            tokens = init_tokens();
+        if (!(strcmp(argv[i], ";")))
         {
             i++;
-            continue ;
+            continue;
         }
-        i = add_cmd(token, argv, &i);
-        if (argv[i - 1] &&!strcmp((const char *)argv[i - 1], "|"))
-            ft_pipe(token);
-        exec_cmd(token, &start, i);
-        before = token;
-        if (token->std_out != 1)
-            token = token->next;
+        i = add_cmd(tokens, argv, i);
+        if (argv[i - 1] && !(strcmp(argv[i - 1], "|")))
+            ft_pipe(tokens);
+        exec_cmd(tokens, &start, i);
+        before = tokens;
+        if (tokens->std_out != 1)
+            tokens = tokens->next;
         ft_free(before);
     }
     return (0);
