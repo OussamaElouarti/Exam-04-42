@@ -61,7 +61,7 @@ void    exec_cmd(t_tokens *tokens, int *start, int i)
     int pid;
     if (!(strcmp(tokens->cmds[0], "cd")))
     {
-        if (tokens->cmds[2])
+        if (tokens->cmds[2] || !tokens->cmds[1])
             print_error("error: cd: bad arguments", NULL, 0);
         else if (chdir(tokens->cmds[1]))
             print_error("error: cd: cannot change ", tokens->cmds[1], 0);
@@ -116,9 +116,6 @@ int     main(int argc, char **argv)
     int i = 1;
     int start = i;
     t_tokens *before;
-
-    if (argc < 2)
-        print_error("error: fatal", NULL, 1);
     while (i < argc)
     {
         if (tokens == NULL || start == i)
