@@ -93,7 +93,7 @@ void    exec_cmd(t_tokens *tokens, int *start, int i)
     {
         while (*start < i)
         {
-            wait(NULL);
+            waitpid(0, NULL, 0);
             (*start)++;
         }
     }
